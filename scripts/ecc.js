@@ -4,7 +4,7 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 const { listAvailableLanguages } = require('./lib/install-executor');
 const { getComputeSponsorCopy } = require('./lib/compute-sponsor');
-const { createSafeItoInvocationEnvironment } = require('./lib/ito-environment');
+const { createSafeItoInvocationEnvironment, getInvocationCommand } = require('./lib/ito-environment');
 
 const COMMANDS = {
   install: {
@@ -46,6 +46,10 @@ const COMMANDS = {
   doctor: {
     script: 'doctor.js',
     description: 'Diagnose missing or drifted ECC-managed files',
+  },
+  feedback: {
+    script: 'feedback.js',
+    description: 'Open the shortest path to report a problem, feedback, or an idea',
   },
   repair: {
     script: 'repair.js',
@@ -99,6 +103,7 @@ const PRIMARY_COMMANDS = [
   'memory',
   'list-installed',
   'doctor',
+  'feedback',
   'repair',
   'auto-update',
   'status',
@@ -143,6 +148,7 @@ Examples:
   ecc catalog show framework:nextjs
   ecc consult "security reviews"
   ecc control-pane --port 8765
+  ecc ito login [--no-browser]
   ecc ito auth
   ecc ito find --gpu h200 --count 8 --nodes 1 --gpus-per-node 8 --days 30 --storage-tb 1 --start-window 2099-08-15 --max-rate 3.00 --form-factor bare_metal --contract-type reservation --fabric infiniband --region us-east-1
   ecc ito status --json
@@ -152,6 +158,7 @@ Examples:
   ecc memory search "migration blockers" --target-harness hermes
   ecc list-installed --json
   ecc doctor --target cursor
+  ecc feedback
   ecc repair --dry-run
   ecc auto-update --dry-run
   ecc status --json
@@ -235,6 +242,7 @@ function runCommand(commandName, args) {
   if (!command) {
     throw new Error(`Unknown command: ${commandName}`);
   }
+  const isItoLogin = commandName === 'ito' && getInvocationCommand(args) === 'login';
   const result = spawnSync(
     process.execPath,
     [path.join(__dirname, command.script), ...args],
@@ -247,7 +255,9 @@ function runCommand(commandName, args) {
           }),
         }
         : process.env,
-      stdio: commandName === 'memory'
+      stdio: isItoLogin
+        ? 'inherit'
+        : commandName === 'memory'
         ? ['inherit', 'pipe', 'pipe']
         : ['pipe', 'pipe', 'pipe'],
       encoding: 'utf8',
