@@ -36,10 +36,10 @@ Targets:
   claude       (default) - Install ECC into ~/.claude/ with managed rules under rules/ecc and flat skills under skills/
   claude-project - Install ECC into ./.claude/ (per-project) with managed rules under rules/ecc and flat skills under skills/
   cursor       - Install rules, hooks, and bundled Cursor configs to ./.cursor/
-  antigravity  - Install rules, workflows, skills, and agents to ./.agent/
+  antigravity  - Install rules, workflows, skills, and agents to ./.agents/
   codex        - Install shared agents/config into ~/.codex/
   gemini       - Install project-local Gemini config into ./.gemini/
-  opencode     - Install shared commands/hooks/config into ~/.opencode/
+  opencode     - Install into OPENCODE_CONFIG_DIR, XDG_CONFIG_HOME/opencode, or ~/.config/opencode/
   codebuddy    - Install commands, agents, skills, and flattened rules into ./.codebuddy/
   joycode      - Install commands, agents, skills, and flattened rules into ./.joycode/
   qwen         - Install commands, agents, skills, rules, and Qwen config into ~/.qwen/
@@ -134,7 +134,7 @@ function printHumanPlan(plan, dryRun) {
   console.log('\nCompute: ' + getComputeSponsorCopy());
 }
 
-function main() {
+async function main() {
   try {
     const options = parseInstallArgs(process.argv);
 
@@ -164,6 +164,7 @@ function main() {
     const rawPlan = createInstallPlanFromRequest(request, {
       projectRoot: process.cwd(),
       homeDir: process.env.HOME || os.homedir(),
+      env: process.env,
       claudeRulesDir: process.env.CLAUDE_RULES_DIR || null,
     });
 
@@ -177,7 +178,18 @@ function main() {
       return;
     }
 
-    const result = applyInstallPlan(rawPlan);
+    let result = applyInstallPlan(rawPlan);
+    const { projectCanonicalInstallState } = require('./lib/install-state-store-sync');
+    const installStateProjection = await projectCanonicalInstallState(result.statePreview, {
+      homeDir: process.env.HOME || os.homedir(),
+    });
+    result = {
+      ...result,
+      installStateProjection,
+      warnings: installStateProjection.warning
+        ? [...result.warnings, `Install health projection warning: ${installStateProjection.warning.message}`]
+        : result.warnings,
+    };
     if (options.json) {
       console.log(JSON.stringify({ dryRun: false, result }, null, 2));
     } else {
